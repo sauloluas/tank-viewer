@@ -21,10 +21,13 @@ SP_B_MAX             = 70      # Setpoint superior do Tanque B (%)
 SP_B_MAX_L           = 8.4
 SP_B_MIN_L           = 4.8
 
-DT_SUB_MAX_S         = 0.5     # Subpasso máximo (s simulados)
-HIST_MAXLEN          = 480     # Pontos no histórico
-SIM_SAMPLE_INTERVAL  = 1.0    # NOVO: s simulados entre pontos do gráfico
+# --- Integração numérica ---
+DT_SUB_MAX_S         = 0.5    # Subpasso máximo (s simulados)
+HIST_MAXLEN          = 240    # Pontos mantidos no gráfico
+SIM_SAMPLE_INTERVAL  = 1.0    # s simulados entre pontos do gráfico
 
+# --- Renderização ---
+UI_REFRESH_S         = 0.15   # NOVO: intervalo entre redesenhos (s reais)
 # ================================================================
 
 
@@ -195,7 +198,7 @@ def svg_processo(vol_a, vol_b, bomba_on, retorno_ativo):
 
 
 # ------------------------------------------------------------------ painel
-@st.fragment(run_every="1s")
+@st.fragment(run_every=UI_REFRESH_S)
 def painel():
     agora = time.monotonic()
     dt = min(max(agora - st.session_state.t_ant, 0.0), 2.5)
