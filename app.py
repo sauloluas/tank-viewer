@@ -16,10 +16,8 @@ Q_RETORNO_MAX        = 6.0    # Vazão máx. do retorno por gravidade (L/min)
 POTENCIA_BOMBA_PCT   = 80      # Potência da bomba (%)
 ABERTURA_VALVULA_PCT = 50      # Abertura da válvula de retorno (%)
 
-SP_B_MIN             = 40      # Setpoint inferior do Tanque B (%)
-SP_B_MAX             = 70      # Setpoint superior do Tanque B (%)
-SP_B_MAX_L           = 8.4
-SP_B_MIN_L           = 4.8
+SP_B_MIN_DEFAULT     = 40      # Setpoint inferior do Tanque B (%)
+SP_B_MAX_DEFAULT     = 70      # Setpoint superior do Tanque B (%)
 
 # --- Integração numérica ---
 DT_SUB_MAX_S         = 0.5    # Subpasso máximo (s simulados)
@@ -38,13 +36,14 @@ if "vol_a" not in st.session_state:
     st.session_state.vol_a      = CAP_A * VOL_A_INICIAL
     st.session_state.vol_b      = CAP_B * VOL_B_INICIAL
     st.session_state.bomba      = False
-    st.session_state.rodando    = True
+    st.session_state.rodando    = False
     st.session_state.hist       = []
     st.session_state.t_ant      = time.monotonic()
-    st.session_state.velocidade = 1
-    st.session_state.t_sim      = 0.0      # NOVO: relógio simulado
-    st.session_state.hist       = []
-    st.session_state.hist_acc   = 0.0      # NOVO: acumulador de amostragem
+    st.session_state.t_sim      = 0.0
+    st.session_state.hist_acc   = 0.0
+    st.session_state.sp_min     = SP_B_MIN_DEFAULT
+    st.session_state.sp_max     = SP_B_MAX_DEFAULT
+    st.session_state.sensor_ligado = False
 
 
 
@@ -52,17 +51,20 @@ def resetar():
     st.session_state.vol_a      = CAP_A * VOL_A_INICIAL
     st.session_state.vol_b      = CAP_B * VOL_B_INICIAL
     st.session_state.bomba      = False
-    st.session_state.rodando    = True
+    st.session_state.rodando    = False
     st.session_state.hist       = []
     st.session_state.t_ant      = time.monotonic()
-    st.session_state.t_sim      = 0.0      # NOVO
-    st.session_state.hist       = []
-    st.session_state.hist_acc   = 0.0      # NOVO
+    st.session_state.t_sim      = 0.0
+    st.session_state.hist_acc   = 0.0
+    st.session_state.sp_min     = SP_B_MIN_DEFAULT
+    st.session_state.sp_max     = SP_B_MAX_DEFAULT
+    st.session_state.sensor_ligado = False
+
 
 
 
 # ------------------------------------------------------------------ desenho
-def svg_processo(vol_a, vol_b, bomba_on, retorno_ativo):
+def svg_processo(vol_a, vol_b, bomba_on, retorno_ativo, sp_min, sp_max, sensor_on):
     fa = max(0.0, min(1.0, vol_a / CAP_A if CAP_A else 0.0))
     fb = max(0.0, min(1.0, vol_b / CAP_B if CAP_B else 0.0))
 
@@ -78,8 +80,11 @@ def svg_processo(vol_a, vol_b, bomba_on, retorno_ativo):
     B_H = B_BOT - B_TOP
     B_AGUA = B_BOT - B_H * fb
 
-    sp_hi_y = B_BOT - B_H * (SP_B_MAX / 100.0)
-    sp_lo_y = B_BOT - B_H * (SP_B_MIN / 100.0)
+    sp_hi_y = B_BOT - B_H * (sp_max / 100.0)
+    sp_lo_y = B_BOT - B_H * (sp_min / 100.0)
+
+    sp_max_l = (sp_max/100)*CAP_B
+    sp_min_l = (sp_min/100)*CAP_B
 
     corpo_b = (f"M {B_L:.0f} {B_TOP:.0f} L {B_L:.0f} {B_BOT:.0f} "
                f"A {B_RX:.0f} {B_RY:.0f} 0 0 0 {B_R:.0f} {B_BOT:.0f} "
@@ -144,24 +149,25 @@ def svg_processo(vol_a, vol_b, bomba_on, retorno_ativo):
       f'fill="none" stroke="#8A9BA8" stroke-width="4"/>')
 
     # setpoints
-    o('<g clip-path="url(#clipB)">')
-    o(f'<ellipse cx="{B_CX:.0f}" cy="{sp_hi_y:.1f}" rx="{B_RX:.0f}" ry="{B_RY:.0f}" '
-      f'fill="none" stroke="#E53935" stroke-width="2.5" '
-      f'stroke-dasharray="9 7" opacity="0.95"/>')
-    o(f'<ellipse cx="{B_CX:.0f}" cy="{sp_lo_y:.1f}" rx="{B_RX:.0f}" ry="{B_RY:.0f}" '
-      f'fill="none" stroke="#FB8C00" stroke-width="2.5" '
-      f'stroke-dasharray="9 7" opacity="0.95"/>')
-    o('</g>')
+    if sensor_on:
+        o('<g clip-path="url(#clipB)">')
+        o(f'<ellipse cx="{B_CX:.0f}" cy="{sp_hi_y:.1f}" rx="{B_RX:.0f}" ry="{B_RY:.0f}" '
+          f'fill="none" stroke="#E53935" stroke-width="2.5" '
+          f'stroke-dasharray="9 7" opacity="0.95"/>')
+        o(f'<ellipse cx="{B_CX:.0f}" cy="{sp_lo_y:.1f}" rx="{B_RX:.0f}" ry="{B_RY:.0f}" '
+          f'fill="none" stroke="#FB8C00" stroke-width="2.5" '
+          f'stroke-dasharray="9 7" opacity="0.95"/>')
+        o('</g>')
 
-    o(f'<text x="{B_R + 14:.0f}" y="{sp_hi_y + 5:.1f}" font-size="13" '
-        f'font-weight="700" fill="#E53935">SP máx — {SP_B_MAX} ({SP_B_MAX_L} L)%</text>')
-    o(f'<text x="{B_R + 14:.0f}" y="{sp_lo_y + 5:.1f}" font-size="13" '
-      f'font-weight="700" fill="#FB8C00">SP mín — {SP_B_MIN} ({SP_B_MIN_L} L)%</text>')
+        o(f'<text x="{B_R + 14:.0f}" y="{sp_hi_y + 5:.1f}" font-size="13" '
+            f'font-weight="700" fill="#E53935">SP máx — {sp_max}% ({sp_max_l:.1f} L)</text>')
+        o(f'<text x="{B_R + 14:.0f}" y="{sp_lo_y + 5:.1f}" font-size="13" '
+          f'font-weight="700" fill="#FB8C00">SP mín — {sp_min}% ({sp_min_l:.1f} L)</text>')
 
-    o(f'<text x="{B_L-20:.0f}" y="205" text-anchor="end" font-size="18" '
-      f'font-weight="700" fill="#37474F">Tanque B</text>')
-    o(f'<text x="{B_CX:.0f}" y="452" text-anchor="middle" font-size="19" '
-      f'font-weight="700" fill="#00695C">{vol_b:,.1f} L</text>')
+        o(f'<text x="{B_L-20:.0f}" y="205" text-anchor="end" font-size="18" '
+          f'font-weight="700" fill="#37474F">Tanque B</text>')
+        o(f'<text x="{B_CX:.0f}" y="452" text-anchor="middle" font-size="19" '
+          f'font-weight="700" fill="#00695C">{vol_b:,.1f} L</text>')
 
     # ---------------- bomba ----------------
     o(f'<g{cls_bomba}>')
@@ -219,16 +225,36 @@ def painel():
         )
 
     with c3:
+
+        st.session_state.sensor_ligado = st.toggle(
+            "🔌 Sensor de nível ligado",
+            value=st.session_state.sensor_ligado,
+            key="tg_sensor",
+        )
+
+        if st.session_state.sensor_ligado:
+            faixa = st.slider(
+                "Faixa de controle do Tanque B (%)",
+                min_value=0,
+                max_value=100,
+                value=(st.session_state.sp_min, st.session_state.sp_max),
+                step=1,
+                key="sp_range",
+            )
+            st.session_state.sp_min, st.session_state.sp_max = faixa
+
+
+
         vel = st.segmented_control(
             "Velocidade",
             options=[1, 2, 5, 10, 20],
             format_func=lambda v: f"{v}×",
             selection_mode="single",
+            default=1,
             key="velocidade",
         )
         if vel is None:
             vel = 1
-            st.session_state.velocidade = 1
 
     # ---------------- modelo físico ----------------
     q_bomba_nom = Q_BOMBA_MAX * (POTENCIA_BOMBA_PCT / 100.0) if st.session_state.bomba else 0.0
@@ -267,7 +293,6 @@ def painel():
 
         st.session_state.t_sim    = t_sim
         st.session_state.hist_acc = hist_acc
-        st.session_state.hist     = st.session_state.hist[-HIST_MAXLEN:]
 
         if st.session_state.vol_a > CAP_A:
             st.session_state.vol_a = CAP_A
@@ -280,6 +305,9 @@ def painel():
             st.session_state.vol_b,
             st.session_state.bomba,
             q_retorno > 0.01,
+            st.session_state.sp_min,
+            st.session_state.sp_max,
+            st.session_state.sensor_ligado,
         ),
         unsafe_allow_html=True,
     )
@@ -291,11 +319,6 @@ def painel():
     m3.metric("Vazão de recalque", f"{q_bomba_nom:,.1f} L/min")
     m4.metric("Vazão de retorno", f"{q_retorno:,.1f} L/min")
 
-    # ---------------- histórico ----------------
-    st.session_state.hist.append({
-        "Tanque A (L)": round(st.session_state.vol_a, 2),
-        "Tanque B (L)": round(st.session_state.vol_b, 2),
-    })
     st.session_state.hist = st.session_state.hist[-HIST_MAXLEN:]
     if st.session_state.hist:
         df = pd.DataFrame(st.session_state.hist).set_index("t (s)")
