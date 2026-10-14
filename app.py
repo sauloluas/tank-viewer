@@ -29,7 +29,6 @@ UI_REFRESH_S         = 0.15   # NOVO: intervalo entre redesenhos (s reais)
 # ================================================================
 
 
-st.title("Sistema de Tanques de Água")
 
 # ---------------------------------------------------------- estado
 if "vol_a" not in st.session_state:
@@ -44,6 +43,7 @@ if "vol_a" not in st.session_state:
     st.session_state.sp_min     = SP_B_MIN_DEFAULT
     st.session_state.sp_max     = SP_B_MAX_DEFAULT
     st.session_state.sensor_ligado = False
+    st.session_state.controlador_ativo = False
 
 
 
@@ -59,6 +59,7 @@ def resetar():
     st.session_state.sp_min     = SP_B_MIN_DEFAULT
     st.session_state.sp_max     = SP_B_MAX_DEFAULT
     st.session_state.sensor_ligado = False
+    st.session_state.controlador_ativo = False
 
 
 
@@ -210,63 +211,94 @@ def painel():
     dt = min(max(agora - st.session_state.t_ant, 0.0), 2.5)
     st.session_state.t_ant = agora
 
-    c1, c2, c3 = st.columns([1, 1, 1])
+    col_esq, col_dir = st.columns([1, 2])
 
-    with c1:
-        rotulo = "⏹️ Desligar bomba" if st.session_state.bomba else "▶️ Ligar bomba"
-        if st.button(rotulo, use_container_width=True, key="btn_bomba"):
-            st.session_state.bomba = not st.session_state.bomba
+    # ============ CONTROLES (coluna esquerda) ============
+    with col_esq:
 
-    with c2:
-        st.session_state.rodando = st.toggle(
-            "Simulação em execução",
-            value=st.session_state.rodando,
-            key="tg_rodando",
-        )
+        # ---- Simulação ----
+        with st.container(border=True):
+            st.markdown("**Simulação**")
 
-    with c3:
-
-        st.session_state.sensor_ligado = st.toggle(
-            "🔌 Sensor de nível ligado",
-            value=st.session_state.sensor_ligado,
-            key="tg_sensor",
-        )
-
-        if st.session_state.sensor_ligado:
-            faixa = st.slider(
-                "Faixa de controle do Tanque B (%)",
-                min_value=0,
-                max_value=100,
-                value=(st.session_state.sp_min, st.session_state.sp_max),
-                step=1,
-                key="sp_range",
+            st.session_state.rodando = st.toggle(
+                "Em execução",
+                value=st.session_state.rodando,
+                key="tg_rodando",
             )
-            st.session_state.sp_min, st.session_state.sp_max = faixa
+
+            vel = st.segmented_control(
+                "Velocidade",
+                options=[1, 2, 5, 10, 20],
+                format_func=lambda v: f"{v}×",
+                selection_mode="single",
+                default=1,
+                key="velocidade",
+            )
+            if vel is None:
+                vel = 1
+
+        # ---- Processo ----
+        with st.container(border=True):
+            st.markdown("**Processo**")
 
 
+            rotulo = "⏹️ Desligar bomba" if st.session_state.bomba else "▶️ Ligar bomba"
+            if st.button(
+                rotulo,
+                use_container_width=True,
+                key="btn_bomba",
+                disabled=st.session_state.controlador_ativo,
+            ):
+                st.session_state.bomba = not st.session_state.bomba
 
-        vel = st.segmented_control(
-            "Velocidade",
-            options=[1, 2, 5, 10, 20],
-            format_func=lambda v: f"{v}×",
-            selection_mode="single",
-            default=1,
-            key="velocidade",
-        )
-        if vel is None:
-            vel = 1
+            st.session_state.controlador_ativo = st.toggle(
+                "Controlador automático",
+                value=st.session_state.controlador_ativo,
+                key="tg_controlador",
+            )
 
-    # ---------------- modelo físico ----------------
+            if st.session_state.controlador_ativo and not st.session_state.sensor_ligado:
+                st.caption("⚠️ Ligue o sensor para o controlador operar.")
+
+            st.divider()
+
+            st.session_state.sensor_ligado = st.toggle(
+                "Sensor de nível",
+                value=st.session_state.sensor_ligado,
+                key="tg_sensor",
+            )
+
+            if st.session_state.sensor_ligado:
+                faixa = st.slider(
+                    "Faixa de controle (%)",
+                    min_value=0,
+                    max_value=100,
+                    value=(st.session_state.sp_min, st.session_state.sp_max),
+                    step=1,
+                    key="sp_range",
+                )
+                st.session_state.sp_min, st.session_state.sp_max = faixa
+
+    # ============ CONTROLADOR ON-OFF ============
+    if st.session_state.controlador_ativo and st.session_state.sensor_ligado:
+        pct_b = (st.session_state.vol_b / CAP_B) * 100.0 if CAP_B else 0.0
+        if pct_b <= st.session_state.sp_min:
+            st.session_state.bomba = True
+        elif pct_b >= st.session_state.sp_max:
+            st.session_state.bomba = False
+
+    # ============ MODELO FÍSICO ============
     q_bomba_nom = Q_BOMBA_MAX * (POTENCIA_BOMBA_PCT / 100.0) if st.session_state.bomba else 0.0
 
     dt_sim_s   = dt * vel
     n_sub      = max(1, int(dt_sim_s / DT_SUB_MAX_S) + 1)
     dt_sub_min = (dt_sim_s / n_sub) / 60.0
-    q_retorno = 0.0
+    q_retorno  = 0.0
+
     if st.session_state.rodando and dt_sub_min > 0:
         t_sim    = st.session_state.t_sim
         hist_acc = st.session_state.hist_acc
-        dt_sub_s = dt_sub_min * 60.0        # subpasso em segundos simulados
+        dt_sub_s = dt_sub_min * 60.0
 
         for _ in range(n_sub):
             frac_b = st.session_state.vol_b / CAP_B if CAP_B else 0.0
@@ -280,7 +312,6 @@ def painel():
             st.session_state.vol_a += v_retorno - v_recalque
             st.session_state.vol_b += v_recalque - v_retorno
 
-            # ---- relógio + amostragem em tempo simulado ----
             t_sim    += dt_sub_s
             hist_acc += dt_sub_s
             if hist_acc >= SIM_SAMPLE_INTERVAL:
@@ -297,22 +328,22 @@ def painel():
         if st.session_state.vol_a > CAP_A:
             st.session_state.vol_a = CAP_A
 
+    # ============ VISUALIZAÇÃO (coluna direita) ============
+    with col_dir:
+        st.markdown(
+            svg_processo(
+                st.session_state.vol_a,
+                st.session_state.vol_b,
+                st.session_state.bomba,
+                q_retorno > 0.01,
+                st.session_state.sp_min,
+                st.session_state.sp_max,
+                st.session_state.sensor_ligado,
+            ),
+            unsafe_allow_html=True,
+        )
 
-    # ---------------- desenho ----------------
-    st.markdown(
-        svg_processo(
-            st.session_state.vol_a,
-            st.session_state.vol_b,
-            st.session_state.bomba,
-            q_retorno > 0.01,
-            st.session_state.sp_min,
-            st.session_state.sp_max,
-            st.session_state.sensor_ligado,
-        ),
-        unsafe_allow_html=True,
-    )
-
-    # ---------------- indicadores ----------------
+    # ============ MÉTRICAS + HISTÓRICO ============
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Tanque A", f"{st.session_state.vol_a:,.1f} L")
     m2.metric("Tanque B", f"{st.session_state.vol_b:,.1f} L")
@@ -323,6 +354,5 @@ def painel():
     if st.session_state.hist:
         df = pd.DataFrame(st.session_state.hist).set_index("t (s)")
         st.line_chart(df, height=240)
-
 
 painel()
