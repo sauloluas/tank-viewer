@@ -241,32 +241,12 @@ def painel():
         with st.container(border=True):
             st.markdown("**Processo**")
 
-
-            rotulo = "⏹️ Desligar bomba" if st.session_state.bomba else "▶️ Ligar bomba"
-            if st.button(
-                rotulo,
-                use_container_width=True,
-                key="btn_bomba",
-                disabled=st.session_state.controlador_ativo,
-            ):
-                st.session_state.bomba = not st.session_state.bomba
-
-            st.session_state.controlador_ativo = st.toggle(
-                "Controlador automático",
-                value=st.session_state.controlador_ativo,
-                key="tg_controlador",
-            )
-
-            if st.session_state.controlador_ativo and not st.session_state.sensor_ligado:
-                st.caption("⚠️ Ligue o sensor para o controlador operar.")
-
-            st.divider()
-
             st.session_state.sensor_ligado = st.toggle(
                 "Sensor de nível",
                 value=st.session_state.sensor_ligado,
                 key="tg_sensor",
             )
+
 
             if st.session_state.sensor_ligado:
                 faixa = st.slider(
@@ -278,6 +258,32 @@ def painel():
                     key="sp_range",
                 )
                 st.session_state.sp_min, st.session_state.sp_max = faixa
+
+
+
+            st.divider()
+
+
+
+            rotulo = "⏹️ Desligar bomba" if st.session_state.bomba else "▶️ Ligar bomba"
+            if st.button(
+                rotulo,
+                use_container_width=True,
+                key="btn_bomba",
+                disabled=st.session_state.controlador_ativo,
+            ):
+                st.session_state.bomba = not st.session_state.bomba
+
+
+            st.session_state.controlador_ativo = st.toggle(
+                "Controlador automático",
+                value=st.session_state.controlador_ativo,
+                key="tg_controlador",
+            )
+
+            if st.session_state.controlador_ativo and not st.session_state.sensor_ligado:
+                st.caption("⚠️ Ligue o sensor para o controlador operar.")
+
 
     # ============ CONTROLADOR ON-OFF ============
     if st.session_state.controlador_ativo and st.session_state.sensor_ligado:
