@@ -13,8 +13,8 @@ VOL_B_INICIAL        = 0.20    # Fração inicial do Tanque B
 
 Q_BOMBA_MAX          = 8.0    # Vazão máx. da bomba (L/min)
 Q_RETORNO_MAX        = 6.0    # Vazão máx. do retorno por gravidade (L/min)
-POTENCIA_BOMBA_PCT   = 80      # Potência da bomba (%)
-ABERTURA_VALVULA_PCT = 50      # Abertura da válvula de retorno (%)
+POTENCIA_BOMBA_DEF   = 80      # Potência da bomba (%)
+ABERTURA_VALVULA_DEF = 50      # Abertura da válvula de retorno (%)
 
 SP_B_MIN_DEFAULT     = 40      # Setpoint inferior do Tanque B (%)
 SP_B_MAX_DEFAULT     = 70      # Setpoint superior do Tanque B (%)
@@ -44,6 +44,8 @@ if "vol_a" not in st.session_state:
     st.session_state.sp_max     = SP_B_MAX_DEFAULT
     st.session_state.sensor_ligado = False
     st.session_state.controlador_ativo = False
+    st.session_state.potencia_bomba = POTENCIA_BOMBA_DEF
+    st.session_state.abertura_valvula = ABERTURA_VALVULA_DEF
 
 
 
@@ -60,6 +62,8 @@ def resetar():
     st.session_state.sp_max     = SP_B_MAX_DEFAULT
     st.session_state.sensor_ligado = False
     st.session_state.controlador_ativo = False
+    st.session_state.potencia_bomba = POTENCIA_BOMBA_DEF
+    st.session_state.abertura_valvula = ABERTURA_VALVULA_DEF
 
 
 
@@ -284,6 +288,25 @@ def painel():
             if st.session_state.controlador_ativo and not st.session_state.sensor_ligado:
                 st.caption("⚠️ Ligue o sensor para o controlador operar.")
 
+            # ================= AJUSTE DE ABERTURAS =================
+
+            with st.expander("Ajustar Atuadores", expanded=False):
+                st.session_state.potencia_bomba = st.slider(
+                    "Potência da bomba (%)",
+                    min_value=0,
+                    max_value=100,
+                    value=st.session_state.potencia_bomba,
+                    step=1,
+                    key="sl_potencia",
+                )
+                st.session_state.abertura_valvula = st.slider(
+                    "Abertura da válvula de retorno (%)",
+                    min_value=0,
+                    max_value=100,
+                    value=st.session_state.abertura_valvula,
+                    step=1,
+                    key="sl_valvula",
+                )
 
     # ============ CONTROLADOR ON-OFF ============
     if st.session_state.controlador_ativo and st.session_state.sensor_ligado:
@@ -294,7 +317,7 @@ def painel():
             st.session_state.bomba = False
 
     # ============ MODELO FÍSICO ============
-    q_bomba_nom = Q_BOMBA_MAX * (POTENCIA_BOMBA_PCT / 100.0) if st.session_state.bomba else 0.0
+    q_bomba_nom = Q_BOMBA_MAX * (st.session_state.potencia_bomba / 100.0) if st.session_state.bomba else 0.0
 
     dt_sim_s   = dt * vel
     n_sub      = max(1, int(dt_sim_s / DT_SUB_MAX_S) + 1)
@@ -308,7 +331,7 @@ def painel():
 
         for _ in range(n_sub):
             frac_b = st.session_state.vol_b / CAP_B if CAP_B else 0.0
-            q_retorno = Q_RETORNO_MAX * (ABERTURA_VALVULA_PCT / 100.0) * (max(frac_b, 0.0) ** 0.5)
+            q_retorno = Q_RETORNO_MAX * (st.session_state.abertura_valvula / 100.0) * (max(frac_b, 0.0) ** 0.5)
 
             v_recalque = min(q_bomba_nom * dt_sub_min,
                              st.session_state.vol_a,
