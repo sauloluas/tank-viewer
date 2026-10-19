@@ -160,10 +160,10 @@ def svg_processo(vol_a, vol_b, bomba_on, retorno_ativo, sp_min, sp_max, sensor_o
           f'stroke-dasharray="9 7" opacity="0.95"/>')
         o('</g>')
 
-    o(f'<text x="{B_R + 14:.0f}" y="{sp_hi_y + 5:.1f}" font-size="13" '
-        f'font-weight="700" fill="#E53935">SP máx — {sp_max}% ({sp_max_l:.1f} L)</text>')
-    o(f'<text x="{B_R + 14:.0f}" y="{sp_lo_y + 5:.1f}" font-size="13" '
-        f'font-weight="700" fill="#FB8C00">SP mín — {sp_min}% ({sp_min_l:.1f} L)</text>')
+        o(f'<text x="{B_R + 14:.0f}" y="{sp_hi_y + 5:.1f}" font-size="13" '
+            f'font-weight="700" fill="#E53935">SP máx — {sp_max}% ({sp_max_l:.1f} L)</text>')
+        o(f'<text x="{B_R + 14:.0f}" y="{sp_lo_y + 5:.1f}" font-size="13" '
+            f'font-weight="700" fill="#FB8C00">SP mín — {sp_min}% ({sp_min_l:.1f} L)</text>')
 
     o(f'<text x="{B_L-20:.0f}" y="205" text-anchor="end" font-size="18" '
         f'font-weight="700" fill="#37474F">Tanque B</text>')
